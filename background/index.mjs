@@ -1,10 +1,13 @@
 import { v4 as uuidv4 } from "uuid";
 import ExpiryMap from "expiry-map";
+import showdown from 'showdown';
 import { fetchSSE } from "./fetch-sse.mjs";
 
 const KEY_ACCESS_TOKEN = "accessToken";
 
 const cache = new ExpiryMap(10 * 1000);
+
+const converter = new showdown.Converter();
 
 async function getAccessToken() {
   if (cache.get(KEY_ACCESS_TOKEN)) {
@@ -22,6 +25,7 @@ async function getAccessToken() {
 
 async function getAnswer(question, callback) {
   const accessToken = await getAccessToken();
+  let result = "";
   await fetchSSE("https://chat.openai.com/backend-api/conversation", {
     method: "POST",
     headers: {
@@ -44,14 +48,14 @@ async function getAnswer(question, callback) {
       parent_message_id: uuidv4(),
     }),
     onMessage(message) {
-      console.debug("sse message", message);
       if (message === "[DONE]") {
+        callback(converter.makeHtml(result));
         return;
       }
       const data = JSON.parse(message);
       const text = data.message?.content?.parts?.[0];
       if (text) {
-        callback(text);
+        result += text
       }
     },
   });
